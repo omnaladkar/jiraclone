@@ -12,41 +12,88 @@ export class AppController {
 }
 
 
+import React, { useState, useEffect } from 'react';
+import {
+  LineChart, Line, BarChart, Bar, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, Legend
+} from 'recharts';
 
-const broadcast = (data) => {
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(data));
-    }
-  });
+const MetricsDashboard = () => {
+  const [metricsData, setMetricsData] = useState([]);
+
+  useEffect(() => {
+    // Establish WebSocket connection to the server
+    const ws = new WebSocket('ws://localhost:4000');
+
+    // Listen for messages (data updates) from the WebSocket server
+    ws.onmessage = (event) => {
+      const newMetrics = JSON.parse(event.data);
+      setMetricsData(newMetrics);  // Update the chart data with new metrics
+    };
+
+    // Clean up the WebSocket connection when the component unmounts
+    return () => {
+      ws.close();
+    };
+  }, []);
+
+  // Prepare data for the charts
+  const chartData = metricsData.map(row => ({
+    instanceName: row.instance_name,
+    timestamp: new Date(row.timestamp).toLocaleTimeString(),
+    cpuUsage: row.cpu_usage,
+    memoryUsage: row.memory_usage,
+    networkIn: row.network_in,
+    networkOut: row.network_out
+  }));
+
+  return (
+    <div>
+      <h2>AWS Instances Metrics Dashboard (Real-Time with WebSockets)</h2>
+
+      {/* LineChart for CPU Usage */}
+      <div>
+        <h3>CPU Usage (%) Over Time</h3>
+        <LineChart width={600} height={300} data={chartData}>
+          <CartesianGrid stroke="#ccc" />
+          <XAxis dataKey="timestamp" />
+          <YAxis />
+          <Tooltip />
+          <Legend />
+          <Line type="monotone" dataKey="cpuUsage" stroke="#8884d8" />
+        </LineChart>
+      </div>
+
+      {/* BarChart for Memory Usage */}
+      <div>
+        <h3>Memory Usage (%) Over Time</h3>
+        <BarChart width={600} height={300} data={chartData}>
+          <CartesianGrid stroke="#ccc" />
+          <XAxis dataKey="timestamp" />
+          <YAxis />
+          <Tooltip />
+          <Legend />
+          <Bar dataKey="memoryUsage" fill="#82ca9d" />
+        </BarChart>
+      </div>
+
+      {/* AreaChart for Network In/Out */}
+      <div>
+        <h3>Network Traffic (MB) Over Time</h3>
+        <AreaChart width={600} height={300} data={chartData}>
+          <CartesianGrid stroke="#ccc" />
+          <XAxis dataKey="timestamp" />
+          <YAxis />
+          <Tooltip />
+          <Legend />
+          <Area type="monotone" dataKey="networkIn" stroke="#8884d8" fill="#8884d8" />
+          <Area type="monotone" dataKey="networkOut" stroke="#82ca9d" fill="#82ca9d" />
+        </AreaChart>
+      </div>
+    </div>
+  );
 };
+
+export default MetricsDashboard;
 
 // Insert data and broadcast updates
-const insertMetrics = () => {
-  const metrics = generateRandomMetrics();
-  const sql = 'INSERT INTO metrics (instance_name, cpu_usage, memory_usage, network_in, network_out) VALUES (?, ?, ?, ?, ?)';
-  
-  db.query(sql, [metrics.instance_name, metrics.cpu_usage, metrics.memory_usage, metrics.network_in, metrics.network_out], (err, result) => {
-    if (err) throw err;
-    
-    console.log('Inserted metrics:', metrics);
-    
-    // Fetch the latest data and broadcast it
-    db.query('SELECT * FROM metrics ORDER BY timestamp DESC LIMIT 10', (err, rows) => {
-      if (err) throw err;
-      broadcast(rows); // Send latest data to all connected clients
-    });
-  });
-};
-
-// Generate random metrics data
-const generateRandomMetrics = () => ({
-  instance_name: `Instance ${Math.floor(Math.random() * 5) + 1}`,
-  cpu_usage: Math.floor(Math.random() * 100),
-  memory_usage: Math.floor(Math.random() * 100),
-  network_in: Math.floor(Math.random() * 500),
-  network_out: Math.floor(Math.random() * 500),
-});
-
-// Insert data every second
-setInterval(insertMetrics, 1000); // Every 1 second
+ // Every 1 second
